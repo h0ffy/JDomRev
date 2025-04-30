@@ -1,0 +1,2137 @@
+<html>
+<head>
+<base href=".">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JennyDoMRev DOM Inspector</title>
+<style>
+
+  #jennydomrev-panel {
+    position: fixed;
+    top: 20px;
+    left: 20px;
+    background: rgba(42, 42, 42, 0.85);
+    border: 1px solid #444;
+    border-radius: 8px;
+    padding: 15px;
+    min-width: 300px;
+    max-width: 90vw;
+    max-height: 90vh;
+    overflow: auto;
+    resize: both;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    z-index: 10000;
+    display: flex; 
+    flex-direction: column; 
+    backdrop-filter: blur(5px);
+  }
+
+  #drag-handle {
+    cursor: move;
+    padding: 5px;
+    margin: -15px -15px 10px -15px;
+    background: rgba(51, 51, 51, 0.9);
+    border-radius: 8px 8px 0 0;
+    border-bottom: 1px solid #444;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-shrink: 0; 
+  }
+
+  #pick-element, #theme-toggle, .download-btn, #clear-network, #send-request, #refresh-storage, #refresh-info, #clear-exceptions, #clear-shell, #ws-connect {
+    background: #444;
+    border: none;
+    color: #fff;
+    padding: 4px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    margin-right: 10px;
+  }
+
+  #pick-element:hover, #theme-toggle:hover, .download-btn:hover, #clear-network:hover, #send-request:hover, #refresh-storage:hover, #refresh-info:hover, #clear-exceptions:hover, #clear-shell:hover, #ws-connect:hover {
+    background: #555;
+  }
+
+  .tab-bar {
+    display: flex;
+    margin: -10px -15px 10px -15px;
+    border-bottom: 1px solid #444;
+    flex-wrap: wrap;
+    flex-shrink: 0; 
+  }
+
+  .tab {
+    padding: 8px 12px;
+    cursor: pointer;
+    background: #333;
+    border: none;
+    color: #888;
+    font-family: inherit;
+    font-size: 0.9em;
+    outline: none; 
+  }
+
+  .tab.active {
+    background: #2a2a2a;
+    color: #fff;
+    border-bottom: 2px solid #00ff95;
+  }
+
+  .tab-content {
+    display: none;
+    flex-grow: 1; 
+    overflow: auto; 
+    padding-bottom: 15px; 
+  }
+
+  .tab-content.active {
+    display: block;
+  }
+
+  .element-tree {
+    font-family: monospace;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  .element {
+    margin-left: 20px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .element:hover {
+    color: #00ff95;
+  }
+
+  .element.editing {
+    background: #333;
+    padding: 4px;
+    border-radius: 4px;
+  }
+
+  .element-editor {
+    width: 100%;
+    background: #333;
+    color: #fff;
+    border: 1px solid #555;
+    padding: 4px;
+    font-family: monospace;
+  }
+
+  .tag {
+    color: #ff79c6;
+  }
+
+  .attribute {
+    color: #50fa7b;
+  }
+
+  .value {
+    color: #f1fa8c;
+  }
+
+  .highlight {
+    outline: 2px solid #00ff95;
+    background: rgba(0,255,149,0.1);
+  }
+
+  #console-output, #shell-output, #ws-messages { 
+    font-family: monospace;
+    font-size: 14px;
+    overflow-y: auto;
+    background: #333;
+    padding: 8px;
+    border-radius: 4px;
+    flex-grow: 1; 
+    display: flex; 
+    flex-direction: column; 
+  }
+
+  .console-line, .shell-line, .ws-message { 
+    padding: 4px 0;
+    border-bottom: 1px solid #444;
+    word-break: break-all; 
+  }
+
+  .console-error, .error { color: #ff5555; }
+  .console-warn { color: #f1fa8c; }
+  .console-info { color: #8be9fd; }
+  .command { color: #bd93f9; }
+  .ws-incoming { color: #50fa7b; }
+  .ws-outgoing { color: #ff79c6; }
+
+  .console-input, .shell-input, .ws-input { 
+    display: flex;
+    padding: 8px;
+    background: #333;
+    border-top: 1px solid #444;
+    border-radius: 0 0 4px 4px;
+    flex-shrink: 0; 
+  }
+
+  .console-input input, .shell-input input, .ws-input input { 
+    flex: 1;
+    background: #2a2a2a;
+    border: 1px solid #444;
+    color: #fff;
+    padding: 4px 8px;
+    font-family: monospace;
+    outline: none; 
+  }
+  
+  .shell-prompt, .ws-prompt {
+    color: #50fa7b;
+    margin-right: 5px;
+    flex-shrink: 0; 
+  }
+
+  /* WebSocket styles */
+  .ws-connection-info {
+    margin-bottom: 10px;
+    padding: 8px;
+    background: #333;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+  }
+  
+  .ws-status {
+    margin-right: 10px;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-weight: bold;
+  }
+  
+  .ws-status.connected {
+    background: #50fa7b;
+    color: #000;
+  }
+  
+  .ws-status.disconnected {
+    background: #ff5555;
+    color: #fff;
+  }
+  
+  .ws-url {
+    flex: 1;
+    padding: 4px 8px;
+    background: #222;
+    border: 1px solid #444;
+    border-radius: 4px;
+    color: #fff;
+    margin-right: 10px;
+  }
+
+  /* Toolbar styles */
+  .toolbar {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 10px;
+    flex-shrink: 0; 
+  }
+  .toolbar button {
+    margin-left: 5px; 
+    margin-right: 0; 
+  }
+  
+  /* Network tab styles */
+  #network-table-container {
+    overflow: auto;
+    flex-grow: 1; 
+    margin-bottom: 10px; 
+  }
+
+  #network-table, #storage-table { 
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+  }
+
+  #network-table th, #network-table td,
+  #storage-table th, #storage-table td { 
+    border: 1px solid #444;
+    padding: 6px;
+    text-align: left;
+  }
+
+  #network-details {
+    border-top: 1px solid #444;
+    padding-top: 10px;
+    margin-top: 10px;
+    display: none; 
+    flex-shrink: 0; 
+  }
+
+  .network-detail-tabs {
+    display: flex;
+    border-bottom: 1px solid #444;
+    margin-bottom: 10px;
+  }
+
+  .network-detail-tab {
+    background: #333;
+    border: none;
+    color: #888;
+    padding: 6px 12px;
+    cursor: pointer;
+    outline: none; 
+  }
+
+  .network-detail-tab.active {
+    color: #fff;
+    border-bottom: 2px solid #00ff95;
+  }
+
+  .network-request-row {
+    cursor: pointer;
+  }
+
+  .network-request-row:hover {
+    background: #333;
+  }
+
+  .network-request-row.selected {
+    background: #444;
+  }
+
+  .response-preview { 
+    white-space: pre-wrap;
+    word-break: break-all;
+    font-family: monospace;
+    font-size: 14px;
+    background: #333;
+    padding: 8px;
+    border-radius: 4px;
+    max-height: 200px; 
+    overflow: auto; 
+  }
+  
+  .detail-section { 
+    margin-bottom: 10px;
+  }
+  .detail-section h4 { 
+    margin: 0 0 5px 0;
+    border-bottom: 1px solid #444;
+    padding-bottom: 3px;
+  }
+  .detail-row { 
+    padding: 3px 0;
+    border-bottom: 1px dotted #444;
+  }
+  .detail-label { 
+    font-weight: bold;
+    margin-right: 5px;
+  }
+
+
+  /* Repeater tab styles */
+  .repeater-panes {
+    display: flex;
+    flex-direction: column;
+    flex-grow: 1; 
+  }
+
+  .repeater-pane {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 10px;
+  }
+
+  .repeater-label {
+    font-weight: bold;
+    margin-bottom: 4px;
+    flex-shrink: 0; 
+  }
+
+  #request-editor, #response-viewer {
+    flex: 1;
+    background: #333;
+    color: #fff;
+    border: 1px solid #444;
+    padding: 8px;
+    font-family: monospace;
+    font-size: 14px;
+    resize: none;
+    border-radius: 4px;
+    outline: none; 
+  }
+
+  /* Storage tab styles */
+  .storage-tabs {
+    display: flex;
+    border-bottom: 1px solid #444;
+    margin-bottom: 10px;
+    flex-shrink: 0; 
+  }
+
+  .storage-tab {
+    background: #333;
+    border: none;
+    color: #888;
+    padding: 6px 12px;
+    cursor: pointer;
+    outline: none; 
+  }
+
+  .storage-tab.active {
+    color: #fff;
+    border-bottom: 2px solid #00ff95;
+  }
+  
+  #storage-content {
+    flex-grow: 1; 
+    overflow: auto; 
+  }
+  
+  #storage-table pre { 
+    margin: 0;
+    white-space: pre-wrap;
+    word-break: break-all;
+  }
+
+  /* Info tab styles */
+  .info-panes {
+    display: flex;
+    flex-direction: column;
+    flex-grow: 1; 
+    overflow: auto; 
+  }
+
+  .info-section {
+    margin-bottom: 20px;
+    flex-shrink: 0; 
+  }
+
+  .info-section h3 {
+    margin-top: 0;
+    border-bottom: 1px solid #444;
+    padding-bottom: 5px;
+  }
+
+  .info-row {
+    display: flex;
+    margin-bottom: 5px;
+    border-bottom: 1px solid #333;
+    padding-bottom: 5px;
+    flex-wrap: wrap; 
+  }
+
+  .info-label {
+    flex: 0 0 180px;
+    font-weight: bold;
+    margin-right: 10px; 
+  }
+
+  .info-value {
+    flex: 1;
+    word-break: break-all; 
+  }
+
+  /* Exceptions tab styles */
+  #exceptions-list {
+    font-family: monospace;
+    overflow: auto;
+    flex-grow: 1; 
+  }
+
+  .exception-item {
+    margin-bottom: 10px;
+    border-bottom: 1px solid #444;
+    padding-bottom: 10px;
+  }
+
+  .exception-header {
+    display: flex;
+    justify-content: space-between;
+    font-weight: bold;
+    margin-bottom: 5px;
+  }
+
+  .exception-message {
+    color: #ff5555;
+    margin-bottom: 5px;
+    word-break: break-all; 
+  }
+
+  .exception-stack {
+    white-space: pre-wrap;
+    color: #ddd;
+    background: #333;
+    padding: 5px;
+    border-radius: 4px;
+    word-break: break-all; 
+  }
+
+  /* Theme variations */
+  #jennydomrev-panel.theme-light {
+    background: rgba(255, 255, 255, 0.85);
+    border: 1px solid #ddd;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    color: #333;
+  }
+
+  #jennydomrev-panel.theme-light #drag-handle {
+    background: rgba(233, 233, 233, 0.9);
+    border-bottom: 1px solid #ddd;
+  }
+
+  #jennydomrev-panel.theme-light .tab {
+    background: #e9e9e9;
+    color: #666;
+  }
+
+  #jennydomrev-panel.theme-light .tab.active {
+    background: rgba(255, 255, 255, 0.7);
+    color: #333;
+    border-bottom: 2px solid #00a9ff;
+  }
+
+  #jennydomrev-panel.theme-light #console-output, 
+  #jennydomrev-panel.theme-light #shell-output,
+  #jennydomrev-panel.theme-light #request-editor, 
+  #jennydomrev-panel.theme-light #response-viewer,
+  #jennydomrev-panel.theme-light #network-table th, 
+  #jennydomrev-panel.theme-light #network-table td,
+  #jennydomrev-panel.theme-light #storage-table th, 
+  #jennydomrev-panel.theme-light #storage-table td,
+  #jennydomrev-panel.theme-light .exception-stack,
+  #jennydomrev-panel.theme-light #storage-table pre,
+  #jennydomrev-panel.theme-light .response-preview,
+  #jennydomrev-panel.theme-light #ws-messages { 
+    background: #eee;
+    border-color: #ccc;
+    color: #333;
+  }
+
+  #jennydomrev-panel.theme-light .console-input input,
+  #jennydomrev-panel.theme-light .shell-input input,
+  #jennydomrev-panel.theme-light .ws-input input { 
+    background: #fff;
+    border-color: #ccc;
+    color: #333;
+  }
+
+  #jennydomrev-panel.theme-light .console-line, 
+  #jennydomrev-panel.theme-light .shell-line,
+  #jennydomrev-panel.theme-light #network-table th, 
+  #jennydomrev-panel.theme-light #network-table td,
+  #jennydomrev-panel.theme-light #storage-table th, 
+  #jennydomrev-panel.theme-light #storage-table td,
+  #jennydomrev-panel.theme-light .detail-row,
+  #jennydomrev-panel.theme-light .info-row,
+  #jennydomrev-panel.theme-light .exception-item,
+  #jennydomrev-panel.theme-light .ws-message { 
+      border-color: #ddd;
+  }
+
+  #jennydomrev-panel.theme-light .network-detail-tab,
+  #jennydomrev-panel.theme-light .storage-tab { 
+    background: #eee;
+    color: #666;
+  }
+
+  #jennydomrev-panel.theme-light .network-detail-tab.active,
+  #jennydomrev-panel.theme-light .storage-tab.active { 
+    background: #fff;
+    color: #333;
+    border-bottom-color: #00a9ff;
+  }
+
+  #jennydomrev-panel.theme-light #pick-element, 
+  #jennydomrev-panel.theme-light #theme-toggle, 
+  #jennydomrev-panel.theme-light .download-btn,
+  #jennydomrev-panel.theme-light #clear-network,
+  #jennydomrev-panel.theme-light #send-request,
+  #jennydomrev-panel.theme-light #refresh-storage,
+  #jennydomrev-panel.theme-light #refresh-info,
+  #jennydomrev-panel.theme-light #clear-exceptions,
+  #jennydomrev-panel.theme-light #clear-shell,
+  #jennydomrev-panel.theme-light #ws-connect { 
+      background: #ddd;
+      color: #333;
+  }
+
+  #jennydomrev-panel.theme-light #pick-element:hover, 
+  #jennydomrev-panel.theme-light #theme-toggle:hover, 
+  #jennydomrev-panel.theme-light .download-btn:hover,
+  #jennydomrev-panel.theme-light #clear-network:hover,
+  #jennydomrev-panel.theme-light #send-request:hover,
+  #jennydomrev-panel.theme-light #refresh-storage:hover,
+  #jennydomrev-panel.theme-light #refresh-info:hover,
+  #jennydomrev-panel.theme-light #clear-exceptions:hover,
+  #jennydomrev-panel.theme-light #clear-shell:hover,
+  #jennydomrev-panel.theme-light #ws-connect:hover { 
+      background: #ccc;
+  }
+
+  #jennydomrev-panel.theme-blue {
+    background: rgba(44, 62, 80, 0.85);
+    border: 1px solid #34495e;
+    color: #eef;
+  }
+
+  #jennydomrev-panel.theme-blue #drag-handle {
+    background: rgba(52, 73, 94, 0.9);
+    border-bottom: 1px solid #3d5a80;
+  }
+
+  #jennydomrev-panel.theme-blue .tab {
+    background: #34495e;
+    color: #aaa;
+  }
+
+  #jennydomrev-panel.theme-blue .tab.active {
+    background: rgba(44, 62, 80, 0.7);
+    color: #fff;
+    border-bottom: 2px solid #3498db;
+  }
+
+  #jennydomrev-panel.theme-blue #console-output, 
+  #jennydomrev-panel.theme-blue #shell-output,
+  #jennydomrev-panel.theme-blue #request-editor, 
+  #jennydomrev-panel.theme-blue #response-viewer,
+  #jennydomrev-panel.theme-blue #network-table th, 
+  #jennydomrev-panel.theme-blue #network-table td,
+  #jennydomrev-panel.theme-blue #storage-table th, 
+  #jennydomrev-panel.theme-blue #storage-table td,
+  #jennydomrev-panel.theme-blue .exception-stack,
+  #jennydomrev-panel.theme-blue #storage-table pre,
+  #jennydomrev-panel.theme-blue .response-preview,
+  #jennydomrev-panel.theme-blue #ws-messages { 
+    background: #34495e;
+    border-color: #3d5a80;
+    color: #eef;
+  }
+
+  #jennydomrev-panel.theme-blue .console-input input,
+  #jennydomrev-panel.theme-blue .shell-input input,
+  #jennydomrev-panel.theme-blue .ws-input input { 
+    background: #2c3e50;
+    border-color: #3d5a80;
+    color: #eef;
+  }
+
+  #jennydomrev-panel.theme-blue .console-line, 
+  #jennydomrev-panel.theme-blue .shell-line,
+  #jennydomrev-panel.theme-blue #network-table th, 
+  #jennydomrev-panel.theme-blue #network-table td,
+  #jennydomrev-panel.theme-blue #storage-table th, 
+  #jennydomrev-panel.theme-blue #storage-table td,
+  #jennydomrev-panel.theme-blue .detail-row,
+  #jennydomrev-panel.theme-blue .info-row,
+  #jennydomrev-panel.theme-blue .exception-item,
+  #jennydomrev-panel.theme-blue .ws-message { 
+      border-color: #3d5a80;
+  }
+
+  #jennydomrev-panel.theme-blue .network-detail-tab,
+  #jennydomrev-panel.theme-blue .storage-tab { 
+    background: #34495e;
+    color: #aaa;
+  }
+
+  #jennydomrev-panel.theme-blue .network-detail-tab.active,
+  #jennydomrev-panel.theme-blue .storage-tab.active { 
+    background: #2c3e50;
+    color: #fff;
+    border-bottom-color: #3498db;
+  }
+
+  #jennydomrev-panel.theme-blue #pick-element, 
+  #jennydomrev-panel.theme-blue #theme-toggle, 
+  #jennydomrev-panel.theme-blue .download-btn,
+  #jennydomrev-panel.theme-blue #clear-network,
+  #jennydomrev-panel.theme-blue #send-request,
+  #jennydomrev-panel.theme-blue #refresh-storage,
+  #jennydomrev-panel.theme-blue #refresh-info,
+  #jennydomrev-panel.theme-blue #clear-exceptions,
+  #jennydomrev-panel.theme-blue #clear-shell,
+  #jennydomrev-panel.theme-blue #ws-connect { 
+      background: #3d5a80;
+      color: #eef;
+  }
+
+  #jennydomrev-panel.theme-blue #pick-element:hover, 
+  #jennydomrev-panel.theme-blue #theme-toggle:hover, 
+  #jennydomrev-panel.theme-blue .download-btn:hover,
+  #jennydomrev-panel.theme-blue #clear-network:hover,
+  #jennydomrev-panel.theme-blue #send-request:hover,
+  #jennydomrev-panel.theme-blue #refresh-storage:hover,
+  #jennydomrev-panel.theme-blue #refresh-info:hover,
+  #jennydomrev-panel.theme-blue #clear-exceptions:hover,
+  #jennydomrev-panel.theme-blue #clear-shell:hover,
+  #jennydomrev-panel.theme-blue #ws-connect:hover { 
+      background: #476e99;
+  }
+
+  #jennydomrev-panel.theme-green {
+    background: rgba(45, 95, 69, 0.85);
+    border: 1px solid #3e7c5b;
+    color: #efe;
+  }
+
+  #jennydomrev-panel.theme-green #drag-handle {
+    background: rgba(62, 124, 91, 0.9);
+    border-bottom: 1px solid #499167;
+  }
+
+  #jennydomrev-panel.theme-green .tab {
+    background: #3e7c5b;
+    color: #aaa;
+  }
+
+  #jennydomrev-panel.theme-green .tab.active {
+    background: rgba(45, 95, 69, 0.7);
+    color: #fff;
+    border-bottom: 2px solid #2ecc71;
+  }
+
+  #jennydomrev-panel.theme-green #console-output, 
+  #jennydomrev-panel.theme-green #shell-output,
+  #jennydomrev-panel.theme-green #request-editor, 
+  #jennydomrev-panel.theme-green #response-viewer,
+  #jennydomrev-panel.theme-green #network-table th, 
+  #jennydomrev-panel.theme-green #network-table td,
+  #jennydomrev-panel.theme-green #storage-table th, 
+  #jennydomrev-panel.theme-green #storage-table td,
+  #jennydomrev-panel.theme-green .exception-stack,
+  #jennydomrev-panel.theme-green #storage-table pre,
+  #jennydomrev-panel.theme-green .response-preview,
+  #jennydomrev-panel.theme-green #ws-messages { 
+    background: #3e7c5b;
+    border-color: #499167;
+    color: #efe;
+  }
+
+  #jennydomrev-panel.theme-green .console-input input,
+  #jennydomrev-panel.theme-green .shell-input input,
+  #jennydomrev-panel.theme-green .ws-input input { 
+    background: #2d5f45;
+    border-color: #499167;
+    color: #efe;
+  }
+
+  #jennydomrev-panel.theme-green .console-line, 
+  #jennydomrev-panel.theme-green .shell-line,
+  #jennydomrev-panel.theme-green #network-table th, 
+  #jennydomrev-panel.theme-green #network-table td,
+  #jennydomrev-panel.theme-green #storage-table th, 
+  #jennydomrev-panel.theme-green #storage-table td,
+  #jennydomrev-panel.theme-green .detail-row,
+  #jennydomrev-panel.theme-green .info-row,
+  #jennydomrev-panel.theme-green .exception-item,
+  #jennydomrev-panel.theme-green .ws-message { 
+      border-color: #499167;
+  }
+
+  #jennydomrev-panel.theme-green .network-detail-tab,
+  #jennydomrev-panel.theme-green .storage-tab { 
+    background: #3e7c5b;
+    color: #aaa;
+  }
+
+  #jennydomrev-panel.theme-green .network-detail-tab.active,
+  #jennydomrev-panel.theme-green .storage-tab.active { 
+    background: #2d5f45;
+    color: #fff;
+    border-bottom-color: #2ecc71;
+  }
+
+  #jennydomrev-panel.theme-green #pick-element, 
+  #jennydomrev-panel.theme-green #theme-toggle, 
+  #jennydomrev-panel.theme-green .download-btn,
+  #jennydomrev-panel.theme-green #clear-network,
+  #jennydomrev-panel.theme-green #send-request,
+  #jennydomrev-panel.theme-green #refresh-storage,
+  #jennydomrev-panel.theme-green #refresh-info,
+  #jennydomrev-panel.theme-green #clear-exceptions,
+  #jennydomrev-panel.theme-green #clear-shell,
+  #jennydomrev-panel.theme-green #ws-connect { 
+      background: #499167;
+      color: #efe;
+  }
+
+  #jennydomrev-panel.theme-green #pick-element:hover, 
+  #jennydomrev-panel.theme-green #theme-toggle:hover, 
+  #jennydomrev-panel.theme-green .download-btn:hover,
+  #jennydomrev-panel.theme-green #clear-network:hover,
+  #jennydomrev-panel.theme-green #send-request:hover,
+  #jennydomrev-panel.theme-green #refresh-storage:hover,
+  #jennydomrev-panel.theme-green #refresh-info:hover,
+  #jennydomrev-panel.theme-green #clear-exceptions:hover,
+  #jennydomrev-panel.theme-green #clear-shell:hover,
+  #jennydomrev-panel.theme-green #ws-connect:hover { 
+      background: #57a57c;
+  }
+</style>
+</head>
+<body>
+
+<div id="jennydomrev-panel">
+  <div id="drag-handle">
+    <span style="color:cyan;">JennyDoMRev Tools</span>
+    <div>
+      <button id="theme-toggle">Change Theme</button>
+      <button id="pick-element">Pick Element</button>
+    </div>
+  </div>
+  <div class="tab-bar">
+    <button class="tab active" data-tab="inspector">DOM Inspector</button>
+    <button class="tab" data-tab="console">Console</button>
+    <button class="tab" data-tab="network">Network</button>
+    <button class="tab" data-tab="repeater">Repeater</button>
+    <button class="tab" data-tab="websocket">WebSocket</button>
+    <button class="tab" data-tab="storage">Storage</button>
+    <button class="tab" data-tab="info">System Info</button>
+    <button class="tab" data-tab="exceptions">Exceptions</button>
+  </div>
+  <div class="tab-content active" id="inspector">
+    <div class="toolbar">
+      <button class="download-btn" id="download-inspector">Download</button>
+    </div>
+    <div class="element-tree" id="tree"></div>
+  </div>
+  <div class="tab-content" id="console">
+    <div class="toolbar">
+      <button id="clear-console">Clear</button>
+      <button class="download-btn" id="download-console">Download</button>
+    </div>
+    <div id="console-output"></div>
+    <div class="console-input">
+      <input type="text" id="console-input" placeholder="Enter console command...">
+    </div>
+  </div>
+  <div class="tab-content" id="network">
+    <div class="toolbar">
+      <button id="clear-network">Clear</button>
+      <button class="download-btn" id="download-network">Download</button>
+    </div>
+    <div id="network-table-container">
+      <table id="network-table">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Method</th>
+            <th>Status</th>
+            <th>Type</th>
+            <th>Size</th>
+            <th>Time</th>
+          </tr>
+        </thead>
+        <tbody id="network-requests">
+        </tbody>
+      </table>
+    </div>
+    <div id="network-details" style="display: none;">
+      <div class="network-detail-tabs">
+        <button class="network-detail-tab active" data-tab="headers">Headers</button>
+        <button class="network-detail-tab" data-tab="response">Response</button>
+      </div>
+      <div id="network-detail-content"></div>
+    </div>
+  </div>
+  <div class="tab-content" id="repeater">
+    <div class="toolbar">
+      <button id="send-request">Send</button>
+      <button class="download-btn" id="download-repeater">Download</button>
+    </div>
+    <div class="repeater-panes">
+      <div class="repeater-pane">
+        <div class="repeater-label">Request</div>
+        <textarea id="request-editor" spellcheck="false"></textarea>
+      </div>
+      <div class="repeater-pane">
+        <div class="repeater-label">Response</div>
+        <textarea id="response-viewer" readonly spellcheck="false"></textarea>
+      </div>
+    </div>
+  </div>
+  <div class="tab-content" id="websocket">
+    <div class="toolbar">
+      <button id="ws-connect">Connect</button>
+      <button id="clear-ws">Clear</button>
+      <button class="download-btn" id="download-websocket">Download</button>
+    </div>
+    <div class="ws-connection-info">
+      <div class="ws-status disconnected">Disconnected</div>
+      <input type="text" class="ws-url" id="ws-url" value="ws://echo.websocket.org" placeholder="WebSocket URL (ws:// or wss://)">
+    </div>
+    <div id="ws-messages"></div>
+    <div class="ws-input">
+      <span class="ws-prompt">→</span>
+      <input type="text" id="ws-message-input" placeholder="Send message..." disabled>
+    </div>
+  </div>
+  <div class="tab-content" id="storage">
+    <div class="toolbar">
+      <button id="refresh-storage">Refresh</button>
+      <button class="download-btn" id="download-storage">Download</button>
+    </div>
+    <div class="storage-tabs">
+      <button class="storage-tab active" data-store="local">LocalStorage</button>
+      <button class="storage-tab" data-store="session">SessionStorage</button>
+      <button class="storage-tab" data-store="cookies">Cookies</button>
+    </div>
+    <div id="storage-content">
+      <table id="storage-table">
+        <thead>
+          <tr>
+            <th>Key</th>
+            <th>Value</th>
+          </tr>
+        </thead>
+        <tbody id="storage-items">
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <div class="tab-content" id="info">
+    <div class="toolbar">
+      <button id="refresh-info">Refresh</button>
+      <button class="download-btn" id="download-info">Download</button>
+    </div>
+    <div class="info-panes">
+      <div class="info-section">
+        <h3>Client Information</h3>
+        <div id="client-info"></div>
+      </div>
+      <div class="info-section">
+        <h3>Server Information</h3>
+        <div id="server-info"></div>
+      </div>
+    </div>
+  </div>
+  <div class="tab-content" id="exceptions">
+    <div class="toolbar">
+      <button id="clear-exceptions">Clear</button>
+      <button class="download-btn" id="download-exceptions">Download</button>
+    </div>
+    <div id="exceptions-list"></div>
+  </div>
+</div>
+
+
+
+<script>
+// Ensure JennyDoMRev loads first
+document.addEventListener('DOMContentLoaded', () => {
+  const jennyDoMRevPanel = new JennyDoMRevPanel();
+  console.log('JennyDoMRev Tools initialized');
+});
+
+class JennyDoMRevPanel {
+  constructor() {
+    this.panel = document.getElementById('jennydomrev-panel');
+    this.dragHandle = document.getElementById('drag-handle');
+    this.themes = ['theme-dark', 'theme-light', 'theme-blue', 'theme-green'];
+    this.currentTheme = 0;
+    
+    this.setupDragging();
+    this.setupTabs();
+    this.setupThemeToggle();
+    
+    try {
+      this.domInspector = new DOMInspector();
+    } catch (e) {
+      console.error("DOM Inspector failed to load:", e);
+    }
+    
+    try {
+      this.console = new JennyDoMRevConsole();
+    } catch (e) {
+      console.error("Console failed to load:", e);
+    }
+    
+    try {
+      this.network = new NetworkMonitor();
+    } catch (e) {
+      console.error("Network Monitor failed to load:", e);
+    }
+    
+    try {
+      this.repeater = new RequestRepeater();
+    } catch (e) {
+      console.error("Request Repeater failed to load:", e);
+    }
+    
+    try {
+      this.webSocket = new WebSocketClient();
+    } catch (e) {
+      console.error("WebSocket Client failed to load:", e);
+    }
+    
+    try {
+      this.storage = new StorageViewer();
+    } catch (e) {
+      console.error("Storage Viewer failed to load:", e);
+    }
+    
+    try {
+      this.systemInfo = new SystemInfo();
+    } catch (e) {
+      console.error("System Info failed to load:", e);
+    }
+    
+    try {
+      this.exceptions = new ExceptionHandler();
+    } catch (e) {
+      console.error("Exception Handler failed to load:", e);
+    }
+    
+    
+    this.setupElementPicker();
+    this.setupDownloadButtons();
+  }
+
+  
+  setupDragging() {
+    let isDragging = false;
+    let currentX, currentY, initialX, initialY;
+    this.dragHandle.addEventListener('mousedown', e => {
+      if (e.target.id === 'pick-element' || e.target.id === 'theme-toggle') return;
+      isDragging = true;
+      initialX = e.clientX - this.panel.offsetLeft;
+      initialY = e.clientY - this.panel.offsetTop;
+    });
+    document.addEventListener('mousemove', e => {
+      if (!isDragging) return;
+      e.preventDefault();
+      currentX = e.clientX - initialX;
+      currentY = e.clientY - initialY;
+      currentX = Math.max(0, Math.min(currentX, window.innerWidth - this.panel.offsetWidth));
+      currentY = Math.max(0, Math.min(currentY, window.innerHeight - this.panel.offsetHeight));
+      this.panel.style.left = `${currentX}px`;
+      this.panel.style.top = `${currentY}px`;
+    });
+    document.addEventListener('mouseup', () => {
+      isDragging = false;
+    });
+  }
+  
+  setupTabs() {
+    const tabs = document.querySelectorAll('.tab');
+    tabs.forEach(tab => {
+      tab.addEventListener('click', () => {
+        tabs.forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        const tabContents = document.querySelectorAll('.tab-content');
+        tabContents.forEach(content => content.classList.remove('active'));
+        const targetContent = document.getElementById(tab.dataset.tab);
+        targetContent.classList.add('active');
+      });
+    });
+  }
+  
+  setupElementPicker() {
+    const pickButton = document.getElementById('pick-element');
+    let isPicking = false;
+    let hoverTimer = null;
+    pickButton.addEventListener('click', () => {
+      isPicking = true;
+      pickButton.style.background = '#00ff95';
+      document.body.style.cursor = 'crosshair';
+    });
+    document.addEventListener('mouseover', e => {
+      if (!isPicking) return;
+      clearTimeout(hoverTimer);
+      hoverTimer = setTimeout(() => {
+        if (e.target !== document.getElementById('jennydomrev-panel') && !document.getElementById('jennydomrev-panel').contains(e.target)) {
+          document.querySelector('[data-tab="inspector"]').click();
+          this.domInspector.findAndHighlightElement(e.target);
+          isPicking = false;
+          pickButton.style.background = '';
+          document.body.style.cursor = '';
+        }
+      }, 1000);
+    });
+    document.addEventListener('mouseout', () => {
+      if (isPicking) {
+        clearTimeout(hoverTimer);
+      }
+    });
+  }
+  
+  setupThemeToggle() {
+    const themeButton = document.getElementById('theme-toggle');
+    themeButton.addEventListener('click', () => {
+      // Remove current theme from panel only
+      this.panel.classList.remove(this.themes[this.currentTheme]);
+      
+      // Switch to next theme
+      this.currentTheme = (this.currentTheme + 1) % this.themes.length;
+      
+      // Apply new theme to panel only
+      this.panel.classList.add(this.themes[this.currentTheme]);
+    });
+    
+    // Initialize with the first theme
+    this.panel.classList.add(this.themes[this.currentTheme]);
+  }
+  
+  setupDownloadButtons() {
+    const downloadButtons = document.querySelectorAll('.download-btn');
+    downloadButtons.forEach(button => {
+      button.addEventListener('click', () => {
+        const tabId = button.id.replace('download-', '');
+        this.downloadTabContent(tabId);
+      });
+    });
+  }
+  
+  downloadTabContent(tabId) {
+    let content = '';
+    let filename = `jennydomrev-${tabId}-${new Date().toISOString().slice(0,19).replace(/:/g, '-')}.txt`;
+    
+    try {
+      switch(tabId) {
+        case 'inspector':
+          content = document.getElementById('tree').innerText;
+          break;
+        case 'console':
+          content = document.getElementById('console-output').innerText;
+          break;
+        case 'network':
+          content = JSON.stringify(this.network.requests || [], null, 2);
+          filename = `jennydomrev-network-log.json`;
+          break;
+        case 'repeater':
+          content = document.getElementById('request-editor').value + '\n\n---RESPONSE---\n\n' + document.getElementById('response-viewer').value;
+          break;
+        case 'websocket':
+          content = document.getElementById('ws-messages').innerText;
+          break;
+        case 'storage':
+          const activeStore = document.querySelector('.storage-tab.active').dataset.store;
+          content = JSON.stringify(this.storage.getStorageData(activeStore) || {}, null, 2);
+          filename = `jennydomrev-${activeStore}-data.json`;
+          break;
+        case 'info':
+          content = document.getElementById('client-info').innerText + '\n\n' + document.getElementById('server-info').innerText;
+          break;
+        case 'exceptions':
+          content = document.getElementById('exceptions-list').innerText;
+          break;
+        case 'shell':
+          content = document.getElementById('shell-output').innerText;
+          break;
+      }
+      
+      const blob = new Blob([content], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.click();
+      
+      setTimeout(() => URL.revokeObjectURL(url), 100);
+    } catch (e) {
+      console.error(`Failed to download ${tabId} content:`, e);
+    }
+  }
+}
+
+class DOMInspector {
+  constructor() {
+    this.tree = document.getElementById('tree');
+    this.buildTree();
+  }
+  buildTree(element = document.body, container = this.tree) {
+    if (container === this.tree) container.innerHTML = '';
+    const elements = element.children;
+    for (let el of elements) {
+      if (el === document.getElementById('jennydomrev-panel')) continue;
+      const elementDiv = document.createElement('div');
+      elementDiv.className = 'element';
+      elementDiv.setAttribute('data-element-path', this.getElementPath(el));
+      const tagSpan = document.createElement('span');
+      tagSpan.className = 'tag';
+      tagSpan.textContent = `<${el.tagName.toLowerCase()}`;
+      elementDiv.appendChild(tagSpan);
+      Array.from(el.attributes).forEach(attr => {
+        const attrSpan = document.createElement('span');
+        attrSpan.className = 'attribute';
+        attrSpan.textContent = ` ${attr.name}=`;
+        const valueSpan = document.createElement('span');
+        valueSpan.className = 'value';
+        valueSpan.textContent = `"${attr.value}"`;
+        elementDiv.appendChild(attrSpan);
+        elementDiv.appendChild(valueSpan);
+      });
+      elementDiv.appendChild(document.createTextNode('>'));
+      elementDiv.addEventListener('mouseover', () => {
+        el.classList.add('highlight');
+      });
+      elementDiv.addEventListener('mouseout', () => {
+        el.classList.remove('highlight');
+      });
+      elementDiv.addEventListener('dblclick', () => {
+        this.makeElementEditable(elementDiv, el);
+      });
+      container.appendChild(elementDiv);
+      if (el.children.length > 0) {
+        this.buildTree(el, elementDiv);
+      }
+    }
+  }
+  getElementPath(element) {
+    const path = [];
+    while (element && element !== document.body) {
+      const index = Array.from(element.parentNode.children).indexOf(element);
+      path.unshift(index);
+      element = element.parentNode;
+    }
+    return path.join(',');
+  }
+  findElementByPath(path) {
+    const indices = path.split(',').map(Number);
+    let element = document.body;
+    for (let index of indices) {
+      element = element.children[index];
+    }
+    return element;
+  }
+  makeElementEditable(elementDiv, domElement) {
+    const currentHTML = elementDiv.innerHTML;
+    elementDiv.classList.add('editing');
+    const editor = document.createElement('input');
+    editor.type = 'text';
+    editor.className = 'element-editor';
+    editor.value = domElement.outerHTML;
+    elementDiv.innerHTML = '';
+    elementDiv.appendChild(editor);
+    editor.focus();
+    editor.addEventListener('keydown', e => {
+      if (e.key === 'Enter') {
+        try {
+          const tempDiv = document.createElement('div');
+          tempDiv.innerHTML = editor.value;
+          const newElement = tempDiv.firstChild;
+          domElement.replaceWith(newElement);
+          this.buildTree();
+        } catch (error) {
+          console.error('Invalid HTML:', error);
+        }
+      } else if (e.key === 'Escape') {
+        elementDiv.innerHTML = currentHTML;
+        elementDiv.classList.remove('editing');
+      }
+    });
+  }
+  findAndHighlightElement(element) {
+    // Guard against null elements
+    if (!element) return;
+    
+    try {
+      const path = this.getElementPath(element);
+      const treeElement = this.tree.querySelector(`[data-element-path="${path}"]`);
+      if (treeElement) {
+        treeElement.scrollIntoView({
+          behavior: 'smooth',
+          block: 'center'
+        });
+        treeElement.style.background = '#00ff9533';
+        setTimeout(() => {
+          treeElement.style.background = '';
+        }, 2000);
+      }
+    } catch (e) {
+      console.error("Error highlighting element:", e);
+    }
+  }
+}
+
+class JennyDoMRevConsole {
+  constructor() {
+    this.output = document.getElementById('console-output');
+    this.input = document.getElementById('console-input');
+    this.setupConsoleOverrides();
+    this.setupConsoleInput();
+  }
+  setupConsoleOverrides() {
+    const originalConsole = {
+      log: console.log,
+      error: console.error,
+      warn: console.warn,
+      info: console.info
+    };
+    ['log', 'error', 'warn', 'info'].forEach(method => {
+      console[method] = (...args) => {
+        originalConsole[method].apply(console, args);
+        this.addLine(args.join(' '), method);
+      };
+    });
+  }
+  setupConsoleInput() {
+    this.input.addEventListener('keydown', async e => {
+      if (e.key === 'Enter') {
+        const command = this.input.value;
+        this.addLine(`> ${command}`, 'log');
+        try {
+          const result = await eval(command);
+          if (result !== undefined) {
+            console.log(result);
+          }
+        } catch (error) {
+          console.error(error);
+        }
+        this.input.value = '';
+      }
+    });
+  }
+  addLine(text, type = 'log') {
+    const line = document.createElement('div');
+    line.className = `console-line console-${type}`;
+    line.textContent = text;
+    this.output.appendChild(line);
+    this.output.scrollTop = this.output.scrollHeight;
+  }
+}
+
+class WebSocketClient {
+  constructor() {
+    this.socket = null;
+    this.messagesContainer = document.getElementById('ws-messages');
+    this.urlInput = document.getElementById('ws-url');
+    this.messageInput = document.getElementById('ws-message-input');
+    this.connectButton = document.getElementById('ws-connect');
+    this.statusIndicator = document.querySelector('.ws-status');
+    this.clearButton = document.getElementById('clear-ws');
+    
+    this.setupEventListeners();
+  }
+  
+  setupEventListeners() {
+    this.connectButton.addEventListener('click', () => {
+      if (this.socket && (this.socket.readyState === WebSocket.OPEN || this.socket.readyState === WebSocket.CONNECTING)) {
+        this.disconnect();
+      } else {
+        this.connect(this.urlInput.value);
+      }
+    });
+    
+    this.messageInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && this.messageInput.value.trim() !== '') {
+        this.sendMessage(this.messageInput.value);
+        this.messageInput.value = '';
+      }
+    });
+    
+    this.clearButton.addEventListener('click', () => {
+      this.messagesContainer.innerHTML = '';
+    });
+  }
+  
+  connect(url) {
+    try {
+      this.addMessage(`Connecting to ${url}...`, 'info');
+      this.socket = new WebSocket(url);
+      
+      this.socket.addEventListener('open', (event) => {
+        this.addMessage('Connection established!', 'info');
+        this.updateConnectionStatus(true);
+        this.messageInput.disabled = false;
+      });
+      
+      this.socket.addEventListener('message', (event) => {
+        this.addMessage(event.data, 'incoming');
+      });
+      
+      this.socket.addEventListener('error', (event) => {
+        this.addMessage('WebSocket error!', 'error');
+        console.error('WebSocket error:', event);
+      });
+      
+      this.socket.addEventListener('close', (event) => {
+        const reason = event.reason ? `: ${event.reason}` : '';
+        this.addMessage(`Connection closed (code: ${event.code}${reason})`, 'info');
+        this.updateConnectionStatus(false);
+        this.messageInput.disabled = true;
+      });
+      
+      this.connectButton.textContent = 'Disconnect';
+    } catch (error) {
+      this.addMessage(`Failed to connect: ${error.message}`, 'error');
+      this.updateConnectionStatus(false);
+    }
+  }
+  
+  disconnect() {
+    if (this.socket) {
+      this.socket.close();
+      this.socket = null;
+      this.connectButton.textContent = 'Connect';
+      this.messageInput.disabled = true;
+    }
+  }
+  
+  sendMessage(message) {
+    if (this.socket && this.socket.readyState === WebSocket.OPEN) {
+      this.socket.send(message);
+      this.addMessage(message, 'outgoing');
+    } else {
+      this.addMessage('Cannot send message: connection not open', 'error');
+    }
+  }
+  
+  addMessage(text, type) {
+    const line = document.createElement('div');
+    line.className = `ws-message ws-${type}`;
+    
+    let prefix;
+    switch (type) {
+      case 'incoming':
+        prefix = '← ';
+        break;
+      case 'outgoing':
+        prefix = '→ ';
+        break;
+      case 'error':
+        prefix = '❌ ';
+        break;
+      case 'info':
+        prefix = 'ℹ ';
+        break;
+      default:
+        prefix = '';
+    }
+    
+    line.textContent = prefix + text;
+    this.messagesContainer.appendChild(line);
+    this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
+  }
+  
+  updateConnectionStatus(isConnected) {
+    if (isConnected) {
+      this.statusIndicator.textContent = 'Connected';
+      this.statusIndicator.className = 'ws-status connected';
+    } else {
+      this.statusIndicator.textContent = 'Disconnected';
+      this.statusIndicator.className = 'ws-status disconnected';
+      this.connectButton.textContent = 'Connect';
+    }
+  }
+}
+
+class NetworkMonitor {
+  constructor() {
+    this.requests = [];
+    this.selectedRequest = null;
+    this.table = document.getElementById('network-requests');
+    this.details = document.getElementById('network-details');
+    this.detailContent = document.getElementById('network-detail-content');
+    
+    this.setupUI();
+    this.interceptNetworkRequests();
+  }
+  
+  setupUI() {
+    // Setup clear button
+    document.getElementById('clear-network').addEventListener('click', () => {
+      this.requests = [];
+      this.render();
+      this.details.style.display = 'none';
+    });
+    
+    // Setup detail tabs
+    const detailTabs = document.querySelectorAll('.network-detail-tab');
+    detailTabs.forEach(tab => {
+      tab.addEventListener('click', () => {
+        detailTabs.forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        if (this.selectedRequest) {
+          this.showRequestDetails(this.selectedRequest, tab.dataset.tab);
+        }
+      });
+    });
+  }
+  
+  interceptNetworkRequests() {
+    const originalFetch = window.fetch;
+    const originalXHROpen = XMLHttpRequest.prototype.open;
+    const originalXHRSend = XMLHttpRequest.prototype.send;
+    const self = this;
+    
+    // Intercept fetch
+    window.fetch = function(...args) {
+      const requestInfo = {
+        url: typeof args[0] === 'string' ? args[0] : args[0].url,
+        method: (args[1]?.method || (typeof args[0] === 'string' ? 'GET' : args[0].method)) || 'GET',
+        headers: args[1]?.headers || (typeof args[0] === 'string' ? {} : args[0].headers) || {},
+        startTime: Date.now(),
+        status: 'pending',
+        type: 'fetch'
+      };
+      
+      const promise = originalFetch.apply(this, args);
+      
+      promise
+        .then(response => {
+          requestInfo.status = response.status;
+          requestInfo.endTime = Date.now();
+          requestInfo.duration = requestInfo.endTime - requestInfo.startTime;
+          
+          // Clone the response to avoid consuming it
+          return response.clone().text().then(text => {
+            requestInfo.responseSize = text.length;
+            requestInfo.responseType = response.headers.get('content-type') || 'unknown';
+            requestInfo.responseText = text;
+            requestInfo.responseHeaders = {};
+            
+            // Convert headers to object
+            for (const [key, value] of response.headers.entries()) {
+              requestInfo.responseHeaders[key] = value;
+            }
+            
+            self.addRequest(requestInfo);
+            return response;
+          });
+        })
+        .catch(error => {
+          requestInfo.status = 'error';
+          requestInfo.error = error.toString();
+          requestInfo.endTime = Date.now();
+          requestInfo.duration = requestInfo.endTime - requestInfo.startTime;
+          self.addRequest(requestInfo);
+        });
+      
+      return promise;
+    };
+    
+    // Intercept XMLHttpRequest
+    XMLHttpRequest.prototype.open = function(method, url) {
+      this._requestInfo = {
+        url: url,
+        method: method,
+        headers: {},
+        startTime: Date.now(),
+        status: 'pending',
+        type: 'xhr'
+      };
+      return originalXHROpen.apply(this, arguments);
+    };
+    
+    XMLHttpRequest.prototype.send = function(body) {
+      const xhr = this;
+      const requestInfo = xhr._requestInfo;
+      
+      if (body) {
+        requestInfo.requestBody = body;
+      }
+      
+      xhr.addEventListener('load', function() {
+        requestInfo.status = xhr.status;
+        requestInfo.statusText = xhr.statusText;
+        requestInfo.endTime = Date.now();
+        requestInfo.duration = requestInfo.endTime - requestInfo.startTime;
+        requestInfo.responseSize = xhr.responseText.length;
+        requestInfo.responseType = xhr.getResponseHeader('content-type') || 'unknown';
+        requestInfo.responseText = xhr.responseText;
+        
+        // Get response headers
+        requestInfo.responseHeaders = {};
+        const headersText = xhr.getAllResponseHeaders();
+        const headerLines = headersText.split('\r\n');
+        headerLines.forEach(line => {
+          if (line) {
+            const separatorIndex = line.indexOf(':');
+            if (separatorIndex > 0) {
+              const name = line.slice(0, separatorIndex).trim().toLowerCase();
+              const value = line.slice(separatorIndex + 1).trim();
+              requestInfo.responseHeaders[name] = value;
+            }
+          }
+        });
+        
+        self.addRequest(requestInfo);
+      });
+      
+      xhr.addEventListener('error', function() {
+        requestInfo.status = 'error';
+        requestInfo.endTime = Date.now();
+        requestInfo.duration = requestInfo.endTime - requestInfo.startTime;
+        self.addRequest(requestInfo);
+      });
+      
+      return originalXHRSend.apply(this, arguments);
+    };
+  }
+  
+  addRequest(requestInfo) {
+    this.requests.push(requestInfo);
+    this.render();
+  }
+  
+  render() {
+    this.table.innerHTML = '';
+    
+    this.requests.forEach((request, index) => {
+      const row = document.createElement('tr');
+      row.className = 'network-request-row';
+      
+      // Extract filename from URL
+      let filename = 'unknown';
+      try {
+        const url = new URL(request.url, window.location.href);
+        filename = url.pathname.split('/').pop() || url.hostname;
+      } catch (e) {
+        filename = request.url.split('/').pop() || request.url;
+      }
+      
+      row.innerHTML = `
+        <td>${filename}</td>
+        <td>${request.method}</td>
+        <td>${request.status}</td>
+        <td>${request.responseType?.split(';')[0] || 'pending'}</td>
+        <td>${this.formatBytes(request.responseSize)}</td>
+        <td>${request.duration !== undefined ? `${request.duration}ms` : '-'}</td>
+      `;
+      
+      row.addEventListener('click', () => {
+        const selectedRows = document.querySelectorAll('.network-request-row.selected');
+        selectedRows.forEach(r => r.classList.remove('selected'));
+        row.classList.add('selected');
+        
+        this.selectedRequest = request;
+        this.details.style.display = 'block';
+        
+        const activeTab = document.querySelector('.network-detail-tab.active');
+        this.showRequestDetails(request, activeTab.dataset.tab);
+      });
+      
+      this.table.appendChild(row);
+    });
+  }
+  
+  formatBytes(bytes) {
+    if (bytes === undefined) return '-';
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  }
+  
+  showRequestDetails(request, tab) {
+    this.detailContent.innerHTML = '';
+    
+    if (tab === 'headers') {
+      // Create general section
+      const generalSection = document.createElement('div');
+      generalSection.className = 'detail-section';
+      generalSection.innerHTML = `
+        <h4>General</h4>
+        <div class="detail-row"><span class="detail-label">Request URL:</span> ${request.url}</div>
+        <div class="detail-row"><span class="detail-label">Request Method:</span> ${request.method}</div>
+        <div class="detail-row"><span class="detail-label">Status Code:</span> ${request.status}</div>
+      `;
+      
+      // Create response headers section
+      const responseHeadersSection = document.createElement('div');
+      responseHeadersSection.className = 'detail-section';
+      responseHeadersSection.innerHTML = '<h4>Response Headers</h4>';
+      
+      if (request.responseHeaders) {
+        for (const [key, value] of Object.entries(request.responseHeaders)) {
+          const row = document.createElement('div');
+          row.className = 'detail-row';
+          row.innerHTML = `<span class="detail-label">${key}:</span> ${value}`;
+          responseHeadersSection.appendChild(row);
+        }
+      }
+      
+      this.detailContent.appendChild(generalSection);
+      this.detailContent.appendChild(responseHeadersSection);
+    } else if (tab === 'response') {
+      const responseViewer = document.createElement('pre');
+      responseViewer.className = 'response-preview';
+      
+      try {
+        // Try to format if JSON
+        if (request.responseType?.includes('application/json')) {
+          const formattedJson = JSON.stringify(JSON.parse(request.responseText), null, 2);
+          responseViewer.textContent = formattedJson;
+          responseViewer.classList.add('json');
+        } else {
+          responseViewer.textContent = request.responseText || 'No response data available';
+        }
+      } catch (e) {
+        responseViewer.textContent = request.responseText || 'No response data available';
+      }
+      
+      this.detailContent.appendChild(responseViewer);
+    }
+  }
+}
+
+class RequestRepeater {
+  constructor() {
+    this.requestEditor = document.getElementById('request-editor');
+    this.responseViewer = document.getElementById('response-viewer');
+    this.sendButton = document.getElementById('send-request');
+    
+    this.setupUI();
+  }
+  
+  setupUI() {
+    // Set initial content
+    this.requestEditor.value = `GET /api/example HTTP/1.1
+Host: example.com
+User-Agent: JennyDoMRev/1.0
+Accept: application/json
+
+`;
+    
+    // Setup send button
+    this.sendButton.addEventListener('click', () => {
+      this.sendRequest();
+    });
+  }
+  
+  parseRequest(requestText) {
+    const lines = requestText.split('\n');
+    const firstLine = lines[0].split(' ');
+    
+    if (firstLine.length < 3) {
+      throw new Error('Invalid request line');
+    }
+    
+    const method = firstLine[0];
+    const path = firstLine[1];
+    
+    let headers = {};
+    let body = '';
+    let inBody = false;
+    
+    for (let i = 1; i < lines.length; i++) {
+      const line = lines[i];
+      
+      if (!inBody) {
+        if (line.trim() === '') {
+          inBody = true;
+          continue;
+        }
+        
+        const colonIndex = line.indexOf(':');
+        if (colonIndex > 0) {
+          const name = line.slice(0, colonIndex).trim();
+          const value = line.slice(colonIndex + 1).trim();
+          headers[name] = value;
+        }
+      } else {
+        body += line + '\n';
+      }
+    }
+    
+    // Find host or use current
+    const host = headers['Host'] || window.location.host;
+    
+    // Construct URL
+    let url;
+    if (path.startsWith('http')) {
+      url = path;
+    } else if (path.startsWith('/')) {
+      url = `${window.location.protocol}//${host}${path}`;
+    } else {
+      url = `${window.location.protocol}//${host}/${path}`;
+    }
+    
+    return { method, url, headers, body: body.trim() };
+  }
+  
+  async sendRequest() {
+    try {
+      this.responseViewer.value = 'Sending request...';
+      
+      const requestData = this.parseRequest(this.requestEditor.value);
+      
+      // Prepare fetch options
+      const options = {
+        method: requestData.method,
+        headers: requestData.headers,
+        credentials: 'include'
+      };
+      
+      // Add body for non-GET requests
+      if (requestData.method !== 'GET' && requestData.body) {
+        options.body = requestData.body;
+      }
+      
+      // Send the request
+      const response = await fetch(requestData.url, options);
+      const responseText = await response.text();
+      
+      // Format response
+      let responseOutput = `HTTP/1.1 ${response.status} ${response.statusText}\n`;
+      
+      for (const [key, value] of response.headers.entries()) {
+        responseOutput += `${key}: ${value}\n`;
+      }
+      
+      responseOutput += '\n';
+      
+      // Try to format JSON response
+      try {
+        if (response.headers.get('content-type')?.includes('application/json')) {
+          responseOutput += JSON.stringify(JSON.parse(responseText), null, 2);
+        } else {
+          responseOutput += responseText;
+        }
+      } catch (e) {
+        responseOutput += responseText;
+      }
+      
+      this.responseViewer.value = responseOutput;
+    } catch (error) {
+      this.responseViewer.value = `Error: ${error.message}`;
+    }
+  }
+}
+
+class StorageViewer {
+  constructor() {
+    this.storageTable = document.getElementById('storage-items');
+    this.tabs = document.querySelectorAll('.storage-tab');
+    this.currentStore = 'local';
+    
+    this.setupUI();
+    this.renderStorage();
+  }
+  
+  setupUI() {
+    // Setup tabs
+    this.tabs.forEach(tab => {
+      tab.addEventListener('click', () => {
+        this.tabs.forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        this.currentStore = tab.dataset.store;
+        this.renderStorage();
+      });
+    });
+    
+    // Setup refresh button
+    document.getElementById('refresh-storage').addEventListener('click', () => {
+      this.renderStorage();
+    });
+  }
+  
+  getStorageData(storageType) {
+    const data = {};
+    
+    try {
+      switch(storageType) {
+        case 'local':
+          for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            try {
+              // Try to parse JSON
+              const value = localStorage.getItem(key);
+              data[key] = this.tryParseJSON(value);
+            } catch (e) {
+              data[key] = localStorage.getItem(key);
+            }
+          }
+          break;
+          
+        case 'session':
+          for (let i = 0; i < sessionStorage.length; i++) {
+            const key = sessionStorage.key(i);
+            try {
+              const value = sessionStorage.getItem(key);
+              data[key] = this.tryParseJSON(value);
+            } catch (e) {
+              data[key] = sessionStorage.getItem(key);
+            }
+          }
+          break;
+          
+        case 'cookies':
+          document.cookie.split(';').forEach(cookie => {
+            const parts = cookie.split('=');
+            if (parts.length >= 2) {
+              const key = parts[0].trim();
+              const value = parts.slice(1).join('=').trim();
+              data[key] = value;
+            }
+          });
+          break;
+      }
+    } catch (e) {
+      console.error('Error accessing storage:', e);
+    }
+    
+    return data;
+  }
+  
+  tryParseJSON(text) {
+    try {
+      return JSON.parse(text);
+    } catch (e) {
+      return text;
+    }
+  }
+  
+  renderStorage() {
+    this.storageTable.innerHTML = '';
+    const data = this.getStorageData(this.currentStore);
+    
+    if (Object.keys(data).length === 0) {
+      const row = document.createElement('tr');
+      row.innerHTML = `<td colspan="2" style="text-align: center;">No data found</td>`;
+      this.storageTable.appendChild(row);
+      return;
+    }
+    
+    for (const [key, value] of Object.entries(data)) {
+      const row = document.createElement('tr');
+      
+      const keyCell = document.createElement('td');
+      keyCell.textContent = key;
+      
+      const valueCell = document.createElement('td');
+      
+      if (typeof value === 'object' && value !== null) {
+        valueCell.innerHTML = `<pre>${JSON.stringify(value, null, 2)}</pre>`;
+      } else {
+        valueCell.textContent = value;
+      }
+      
+      row.appendChild(keyCell);
+      row.appendChild(valueCell);
+      this.storageTable.appendChild(row);
+    }
+  }
+}
+
+class SystemInfo {
+  constructor() {
+    this.clientInfoEl = document.getElementById('client-info');
+    this.serverInfoEl = document.getElementById('server-info');
+    
+    this.setupUI();
+    this.loadInfo();
+  }
+  
+  setupUI() {
+    document.getElementById('refresh-info').addEventListener('click', () => {
+      this.loadInfo();
+    });
+  }
+  
+  loadInfo() {
+    this.loadClientInfo();
+    this.loadServerInfo();
+  }
+  
+  loadClientInfo() {
+    const clientInfo = [
+      { label: 'Browser', value: this.getBrowserInfo() },
+      { label: 'User Agent', value: navigator.userAgent },
+      { label: 'Platform', value: navigator.platform },
+      { label: 'Language', value: navigator.language },
+      { label: 'Screen Resolution', value: `${window.screen.width}x${window.screen.height}` },
+      { label: 'Window Size', value: `${window.innerWidth}x${window.innerHeight}` },
+      { label: 'Color Depth', value: `${window.screen.colorDepth} bits` },
+      { label: 'Timezone', value: Intl.DateTimeFormat().resolvedOptions().timeZone },
+      { label: 'Timezone Offset', value: `UTC${new Date().getTimezoneOffset() <= 0 ? '+' : '-'}${Math.abs(new Date().getTimezoneOffset() / 60)}` },
+      { label: 'Cookies Enabled', value: navigator.cookieEnabled ? 'Yes' : 'No' },
+      { label: 'Do Not Track', value: navigator.doNotTrack || window.doNotTrack || navigator.msDoNotTrack || 'Not set' }
+    ];
+    
+    this.renderInfo(clientInfo, this.clientInfoEl);
+  }
+  
+  loadServerInfo() {
+    // Get server info from network details
+    const serverInfo = [
+      { label: 'Current URL', value: window.location.href },
+      { label: 'Hostname', value: window.location.hostname },
+      { label: 'Port', value: window.location.port || (window.location.protocol === 'https:' ? '443' : '80') },
+      { label: 'Protocol', value: window.location.protocol },
+      { label: 'Pathname', value: window.location.pathname },
+      { label: 'Page Loaded At', value: new Date().toLocaleString() }
+    ];
+    
+    // Try to fetch server headers
+    fetch(window.location.href, { method: 'HEAD' })
+      .then(response => {
+        const headers = [
+          { label: 'Server', value: response.headers.get('server') || 'Unknown' },
+          { label: 'Content-Type', value: response.headers.get('content-type') || 'Unknown' },
+          { label: 'Connection', value: response.headers.get('connection') || 'Unknown' },
+          { label: 'Cache-Control', value: response.headers.get('cache-control') || 'Not specified' },
+          { label: 'Status', value: `${response.status} ${response.statusText}` }
+        ];
+        
+        this.renderInfo([...serverInfo, ...headers], this.serverInfoEl);
+      })
+      .catch(() => {
+        // If fetch fails, just show the basic info
+        this.renderInfo(serverInfo, this.serverInfoEl);
+      });
+  }
+  
+  getBrowserInfo() {
+    const ua = navigator.userAgent;
+    let browserName = "Unknown";
+    let browserVersion = "";
+    
+    if (ua.indexOf("Firefox") > -1) {
+      browserName = "Firefox";
+      browserVersion = ua.match(/Firefox\/([0-9.]+)/)?.[1] || "";
+    } else if (ua.indexOf("SamsungBrowser") > -1) {
+      browserName = "Samsung Browser";
+      browserVersion = ua.match(/SamsungBrowser\/([0-9.]+)/)?.[1] || "";
+    } else if (ua.indexOf("Opera") > -1 || ua.indexOf("OPR") > -1) {
+      browserName = "Opera";
+      browserVersion = ua.match(/Opera\/([0-9.]+)/)?.[1] || ua.match(/OPR\/([0-9.]+)/)?.[1] || "";
+    } else if (ua.indexOf("Edg") > -1) {
+      browserName = "Edge";
+      browserVersion = ua.match(/Edg\/([0-9.]+)/)?.[1] || "";
+    } else if (ua.indexOf("Chrome") > -1) {
+      browserName = "Chrome";
+      browserVersion = ua.match(/Chrome\/([0-9.]+)/)?.[1] || "";
+    } else if (ua.indexOf("Safari") > -1) {
+      browserName = "Safari";
+      browserVersion = ua.match(/Version\/([0-9.]+)/)?.[1] || "";
+    } else if (ua.indexOf("MSIE") > -1 || ua.indexOf("Trident") > -1) {
+      browserName = "Internet Explorer";
+      browserVersion = ua.match(/MSIE ([0-9.]+)/)?.[1] || ua.match(/rv:([0-9.]+)/)?.[1] || "";
+    }
+    
+    return `${browserName} ${browserVersion}`;
+  }
+  
+  renderInfo(infoArray, container) {
+    container.innerHTML = '';
+    
+    infoArray.forEach(item => {
+      if (!item.value) return;
+      
+      const row = document.createElement('div');
+      row.className = 'info-row';
+      
+      const label = document.createElement('div');
+      label.className = 'info-label';
+      label.textContent = item.label;
+      
+      const value = document.createElement('div');
+      value.className = 'info-value';
+      value.textContent = item.value;
+      
+      row.appendChild(label);
+      row.appendChild(value);
+      container.appendChild(row);
+    });
+  }
+}
+
+class ExceptionHandler {
+  constructor() {
+    this.exceptionsList = document.getElementById('exceptions-list');
+    this.setupErrorCapture();
+    this.setupUI();
+  }
+  
+  setupUI() {
+    document.getElementById('clear-exceptions').addEventListener('click', () => {
+      this.exceptionsList.innerHTML = '';
+    });
+  }
+  
+  setupErrorCapture() {
+    const self = this;
+    
+    // Override console.error
+    const originalConsoleError = console.error;
+    console.error = function(...args) {
+      originalConsoleError.apply(console, args);
+      
+      const errorObj = args.find(arg => arg instanceof Error) || 
+                      new Error(args.map(arg => String(arg)).join(' '));
+      
+      self.logException(errorObj);
+    };
+    
+    // Global error handler
+    window.addEventListener('error', (event) => {
+      this.logException(event.error || new Error(event.message));
+      return true;
+    });
+    
+    // Unhandled promise rejection handler
+    window.addEventListener('unhandledrejection', (event) => {
+      const error = event.reason instanceof Error ? 
+                    event.reason : 
+                    new Error(`Unhandled Promise Rejection: ${event.reason}`);
+      this.logException(error);
+    });
+  }
+  
+  logException(error) {
+    const exceptionItem = document.createElement('div');
+    exceptionItem.className = 'exception-item';
+    
+    const header = document.createElement('div');
+    header.className = 'exception-header';
+    
+    const title = document.createElement('span');
+    title.textContent = error.name || 'Error';
+    
+    const timestamp = document.createElement('span');
+    timestamp.textContent = new Date().toLocaleTimeString();
+    
+    header.appendChild(title);
+    header.appendChild(timestamp);
+    
+    const message = document.createElement('div');
+    message.className = 'exception-message';
+    message.textContent = error.message || 'Unknown error';
+    
+    const stack = document.createElement('pre');
+    stack.className = 'exception-stack';
+    
+    // Format stack trace
+    if (error.stack) {
+      const formattedStack = error.stack
+        .split('\n')
+        .map(line => line.trim())
+        .filter(line => line.startsWith('at '))
+        .join('\n');
+      
+      stack.textContent = formattedStack || 'No stack trace available';
+    } else {
+      stack.textContent = 'No stack trace available';
+    }
+    
+    exceptionItem.appendChild(header);
+    exceptionItem.appendChild(message);
+    exceptionItem.appendChild(stack);
+    
+    this.exceptionsList.appendChild(exceptionItem);
+  }
+}
+
+
+// Make sure JennyDoMRev loads first by calling this on page load
+window.addEventListener('load', () => {
+  // Prioritize JennyDoMRev panel (move to beginning of body if needed)
+  const panel = document.getElementById('jennydomrev-panel');
+  if (panel && panel.parentNode) {
+    document.body.insertBefore(panel, document.body.firstChild);
+  }
+});
+
+console.log('JennyDoMRev Console initialized');
+console.info('Try inspecting DOM elements!');
+window.addEventListener('resize', () => {
+  try {
+    document.querySelector('.tab.active').click();
+  } catch (e) {}
+});
+</script>
+</body>
+</html>
